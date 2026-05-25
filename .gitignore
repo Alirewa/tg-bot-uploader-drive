@@ -1,0 +1,43 @@
+# Environment & secrets
+.env
+
+# Pyrogram session files
+*.session
+*.session-journal
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Temp upload files
+temp/
+
+# Service account JSON files (never commit these)
+service_accounts/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
