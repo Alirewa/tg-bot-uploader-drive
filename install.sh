@@ -44,18 +44,22 @@ fi
 info "Updating package lists…"
 apt-get update -qq
 
-info "Installing system dependencies…"
+info "Installing base system dependencies…"
 apt-get install -y -qq \
-    python3 python3-pip python3-venv python3-dev \
     build-essential libssl-dev libffi-dev \
     git curl wget ca-certificates \
-    gnupg lsb-release rsync
+    gnupg lsb-release rsync software-properties-common
 
-python3 -c "import sys; assert sys.version_info >= (3,10), 'Python 3.10+ required'" \
-    || error "Python 3.10 or newer is required."
+# ── Python 3.12 — required (Pyrogram + SQLAlchemy are incompatible with 3.14) ─
+# Add deadsnakes PPA which provides Python 3.12 on all Ubuntu versions.
+info "Adding deadsnakes PPA for Python 3.12…"
+add-apt-repository -y ppa:deadsnakes/ppa
+apt-get update -qq
+apt-get install -y python3.12 python3.12-venv python3.12-dev
 
-PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-success "Python $PY_VER detected"
+PYTHON_BIN="python3.12"
+PY_VER=$("$PYTHON_BIN" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+success "Using Python $PY_VER"
 
 # ── 2. Docker ─────────────────────────────────────────────────────────────────
 if ! command -v docker &>/dev/null; then
@@ -123,7 +127,7 @@ success "Project files copied"
 
 # ── 5. Python virtual environment ─────────────────────────────────────────────
 info "Creating isolated Python virtual environment at ${VENV_DIR}…"
-python3 -m venv "${VENV_DIR}"
+"$PYTHON_BIN" -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/pip" install --upgrade pip -q
 "${VENV_DIR}/bin/pip" install -r "${INSTALL_DIR}/requirements.txt" -q
 success "Python dependencies installed"
@@ -168,7 +172,13 @@ docker run -d \
     aiogram/telegram-bot-api:latest
 success "Container ${DOCKER_CONTAINER} running on port 8081"
 
-# ── 8. systemd service ────────────────────────────────────────────────────────
+# ── 8. tgdrive CLI ────────────────────────────────────────────────────────────
+info "Installing tgdrive management CLI…"
+cp "${SCRIPT_DIR}/tgdrive" /usr/local/bin/tgdrive
+chmod +x /usr/local/bin/tgdrive
+success "tgdrive installed — use: tgdrive help"
+
+# ── 9. systemd service ────────────────────────────────────────────────────────
 info "Creating systemd service: ${SERVICE_NAME}.service…"
 cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
@@ -209,7 +219,11 @@ echo -e "${GREEN}${BOLD}  Installation complete!${NC}"
 echo -e "${BOLD}══════════════════════════════════════════════════${NC}\n"
 echo -e "  📂 Install path:     ${CYAN}${INSTALL_DIR}${NC}"
 echo -e "  ⚙️  Service name:     ${CYAN}${SERVICE_NAME}.service${NC}"
-echo -e "  📋 View logs:        ${CYAN}journalctl -u ${SERVICE_NAME} -f${NC}"
-echo -e "  🔄 Restart:          ${CYAN}systemctl restart ${SERVICE_NAME}${NC}"
-echo -e "  ⛔ Stop:             ${CYAN}systemctl stop ${SERVICE_NAME}${NC}"
+echo -e ""
+echo -e "  ${BOLD}tgdrive commands:${NC}"
+echo -e "  📋 View logs:        ${CYAN}sudo tgdrive logs${NC}"
+echo -e "  🔄 Restart:          ${CYAN}sudo tgdrive restart${NC}"
+echo -e "  ⛔ Stop:             ${CYAN}sudo tgdrive stop${NC}"
+echo -e "  ✏️  Edit config:      ${CYAN}sudo tgdrive env${NC}"
+echo -e "  🔁 Update bot:       ${CYAN}sudo tgdrive update${NC}"
 echo -e "\n  ⚠️  ${YELLOW}Make sure you followed GOOGLE_SETUP.md before starting the bot!${NC}\n"

@@ -10,6 +10,7 @@ import os
 from typing import Callable, Coroutine, Optional
 
 import google.auth.transport.requests
+from google.oauth2 import service_account
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -17,6 +18,8 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
 from config import (
+    BOT_DRIVE_FOLDER_ID,
+    BOT_DRIVE_SA_JSON,
     GOOGLE_OAUTH_CLIENT_ID,
     GOOGLE_OAUTH_CLIENT_SECRET,
     GOOGLE_OAUTH_REDIRECT_URI,
@@ -26,6 +29,21 @@ logger = logging.getLogger(__name__)
 
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024  # 5 MB
+
+
+# ── Bot service builder (Service Account) ─────────────────────────────────────
+
+def build_bot_service():
+    """
+    Return a Drive service authenticated as the bot's service account.
+    Raises if BOT_DRIVE_SA_JSON is not configured or the file is missing.
+    """
+    if not BOT_DRIVE_SA_JSON:
+        raise RuntimeError("BOT_DRIVE_SA_JSON is not configured.")
+    creds = service_account.Credentials.from_service_account_file(
+        BOT_DRIVE_SA_JSON, scopes=DRIVE_SCOPES
+    )
+    return build("drive", "v3", credentials=creds, cache_discovery=False)
 
 
 # ── User service builder ──────────────────────────────────────────────────────
@@ -65,10 +83,11 @@ def create_oauth_flow() -> Flow:
     )
 
 
-def get_auth_url(flow: Flow) -> str:
-    url, _ = flow.authorization_url(
-        access_type="offline", prompt="consent", include_granted_scopes="true"
-    )
+def get_auth_url(flow: Flow, state: str = "") -> str:
+    kwargs: dict = {"access_type": "offline", "prompt": "consent", "include_granted_scopes": "true"}
+    if state:
+        kwargs["state"] = state
+    url, _ = flow.authorization_url(**kwargs)
     return url
 
 
@@ -80,16 +99,20 @@ def sync_upload(
     service,
     async_progress_cb: Optional[Callable[..., Coroutine]],
     loop: asyncio.AbstractEventLoop,
+    folder_id: str = "",
 ) -> tuple[str, str]:
     """
     Upload *file_path* to Google Drive and return (file_id, share_link).
     Fires *async_progress_cb(current_bytes, total_bytes)* on each chunk via the
-    event loop.
+    event loop. If *folder_id* is given, the file is placed in that folder.
     """
     file_size = os.path.getsize(file_path)
     media = MediaFileUpload(file_path, resumable=True, chunksize=UPLOAD_CHUNK_SIZE)
+    body: dict = {"name": file_name}
+    if folder_id:
+        body["parents"] = [folder_id]
     request = service.files().create(
-        body={"name": file_name},
+        body=body,
         media_body=media,
         fields="id",
     )

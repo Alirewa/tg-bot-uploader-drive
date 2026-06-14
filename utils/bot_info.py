@@ -1,0 +1,1 @@
+BOT_USERNAME: str = ""
