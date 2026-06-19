@@ -1,0 +1,16 @@
+.env
+*.session
+*.session-journal
+*.db
+*.db-shm
+*.db-wal
+temp/
+service_accounts/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.git/
+.idea/
+.vscode/
+data/
